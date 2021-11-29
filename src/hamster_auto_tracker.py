@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# coding: utf-8
 
 """
 Automatically track working time in hamster.
@@ -38,6 +39,8 @@ from hamster.lib.dbus import (
     to_dbus_fact_json
 )
 from hamster.lib.fact import Fact, FactError
+import signal
+import sys
 logger = default_logger(__file__)
 
 DBusMainLoop(set_as_default=True)
@@ -74,9 +77,16 @@ class AutoTracker():
         h = self.bus.get_object('org.gnome.Hamster', '/org/gnome/Hamster')
         self.hamster = dbus.Interface(h, dbus_interface='org.gnome.Hamster')
 
+        # install signal handler so we can stop tracking on service stop/shutdown
+        signal.signal(signal.SIGINT, self.on_signal)
+        signal.signal(signal.SIGTERM, self.on_signal)
+
+
 
     def run(self):
         self.logger.info("Starting up.")
+        # start activity
+        self.resume_activity()
 
         # get notified of screen locked events (either due to idle
         # timeout or due to users locking their screen)
@@ -90,6 +100,13 @@ class AutoTracker():
         self.mainloop.run()
         self.logger.info("Mainloop ended.")
 
+
+    def on_signal(self, signum, frame):
+        "Handle quit/term signals for shutdown"
+        self.mainloop.quit()
+        self.stop_activity()
+        sys.exit()
+        return 1
 
     def is_screensaver_active(self):
         act = self.screensaver.GetActive()
